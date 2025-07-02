@@ -1,0 +1,293 @@
+import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
+import PaintCanvas from "./paintcanvas";
+import { useEffect, useRef, useState } from "react";
+import Konva from "konva";
+import { ImageProps, LineProps } from "@/types/paint.types";
+import { parseGIF, decompressFrames } from "gifuct-js";
+// import GIF from "gif.js";
+
+interface Step3NonElderlyProps {
+  stepFunctions: {
+    goBack: () => void;
+    goNext: () => void;
+  };
+}
+
+interface ZippedGifObject {
+  id: string;
+  src: string;
+  gif: any; // Replace 'any' with the actual gifler type if available
+  canvas: HTMLCanvasElement;
+  frames: any;
+  durations: any;
+  totalDuration: number;
+}
+
+const extractGifCanvases = (stage: Konva.Stage): HTMLCanvasElement[] => {
+  const layer = stage.findOne("Layer") as Konva.Layer;
+  if (!layer) {
+    console.warn("Layer not found on the stage.");
+    return [];
+  }
+
+  const gifElements: HTMLCanvasElement[] = [];
+
+  layer.find("Image").forEach((node) => {
+    // Filter for images with type "gif"
+    if (node.attrs.type === "gif") {
+      const konvaImage = node as Konva.Image;
+      const canvas = konvaImage.image() as HTMLCanvasElement;
+
+      if (canvas) {
+        gifElements.push(canvas);
+      }
+    }
+  });
+
+  return gifElements;
+};
+
+const normalizeGifDurations = (
+  gifs: ZippedGifObject[],
+  referenceGif: ZippedGifObject,
+): ZippedGifObject[] => {
+  const longestDuration = referenceGif.totalDuration;
+
+  // Normalize the durations of the frames in other GIFs
+  return gifs.map((gif) => {
+    const totalDuration = gif.totalDuration;
+
+    if (totalDuration !== longestDuration) {
+      // Scale the durations of each frame
+      const scale = longestDuration / totalDuration;
+      const normalizedDurations = gif.durations.map(
+        (duration: number) => duration * scale,
+      );
+
+      return {
+        ...gif,
+        durations: normalizedDurations, // Set the normalized durations
+      };
+    }
+    return gif;
+  });
+};
+
+const processGifs = async (zippedGifs: ZippedGifObject[]) => {
+  // Identify GIF with the longest duration
+  const referenceGif = zippedGifs.reduce((longestGif, currentGif) => {
+    return currentGif.totalDuration > longestGif.totalDuration
+      ? currentGif
+      : longestGif;
+  }, zippedGifs[0]);
+
+  // NormalizeGifs to have the same length
+  // TODO: if length disparity is significant, perhaps consider repeating cycles
+  const normalizedGifs = normalizeGifDurations(zippedGifs, referenceGif);
+
+  return normalizedGifs;
+};
+
+const zipCanvasesAndDrawables = (
+  canvases: HTMLCanvasElement[],
+  drawables: ImageProps[],
+): Promise<ZippedGifObject[]> => {
+  if (canvases.length !== drawables.length) {
+    console.warn("The number of canvases and drawables does not match.");
+    return Promise.resolve([]);
+  }
+
+  const zippedGifObjects: Promise<ZippedGifObject>[] = drawables.map(
+    (drawable, index) =>
+      new Promise<ZippedGifObject>(async (resolve, reject) => {
+        const canvas = canvases[index];
+        try {
+          const response = await fetch(drawable.src);
+          const arrayBuffer = await response.arrayBuffer();
+          const gif = parseGIF(arrayBuffer);
+          const frames = decompressFrames(gif, true);
+          const extractedFrames = frames.map((frame: any) => {
+            const imageData = new ImageData(
+              new Uint8ClampedArray(frame.patch),
+              frame.dims.width,
+              frame.dims.height,
+            );
+            const ctx = canvas.getContext("2d");
+            ctx?.putImageData(imageData, 0, 0);
+            return canvas.toDataURL(); // Convert canvas to image URL
+          });
+
+          const durations = frames.map((frame: any) => frame.delay); // store durations
+
+          resolve({
+            id: drawable.id,
+            src: drawable.src,
+            gif: frames, // store the parsed gif data
+            canvas,
+            frames: extractedFrames, // store frames
+            durations,
+            totalDuration: durations.reduce((sum, d) => sum + d, 0),
+          });
+        } catch (error) {
+          console.error(error);
+          reject(new Error(`Failed to load gif from source: ${drawable.src}`));
+        }
+      }),
+  );
+
+  return Promise.all(zippedGifObjects);
+};
+
+export default function Step3NonElderly({
+  stepFunctions,
+}: Step3NonElderlyProps) {
+  const progress = (3 / 4) * 100;
+
+  const [canvasDimensions, setCanvasDimensions] = useState({
+    width: 0,
+    height: 650,
+  });
+
+  useEffect(() => {
+    const updateCanvasDimensions = () => {
+      //TODO: Discuss appropriate aspect ratio
+      const width = window.innerWidth;
+      setCanvasDimensions({ width, height: 650 });
+    };
+
+    updateCanvasDimensions();
+    window.addEventListener("resize", updateCanvasDimensions);
+
+    return () => {
+      window.removeEventListener("resize", updateCanvasDimensions);
+    };
+  }, []);
+
+  const canvasRef = useRef<{
+    getStageRef: () => Konva.Stage;
+    getLayerRef: () => Konva.Layer;
+    getDrawables: () => (ImageProps | LineProps)[];
+  }>(null);
+
+  const exportLayerAsGif = async () => {
+    const stageRef = canvasRef.current!.getStageRef();
+    const layer = canvasRef.current!.getLayerRef();
+    const canvases = extractGifCanvases(stageRef);
+    const drawables = canvasRef.current!.getDrawables();
+    const gifDrawables = drawables.filter(
+      (d): d is ImageProps => d.type === "gif",
+    );
+
+    const gif = new window.GIF({
+      workers: 2,
+      quality: 10,
+      width: canvasDimensions.width,
+      height: canvasDimensions.height,
+      workerScript: "/worker/gif.worker.js",
+    });
+
+    const zippedGifObjects = await zipCanvasesAndDrawables(
+      canvases,
+      gifDrawables,
+    );
+
+    const normalizedGifs = await processGifs(zippedGifObjects);
+
+    const timedFrames = normalizedGifs.map((gif) => ({
+      frames: gif.frames,
+      durations: gif.durations,
+      canvas: gif.canvas,
+      nextTimeFrame: 0,
+      index: 0,
+    }));
+
+    const interval = 30;
+
+    const totalFrames = Math.ceil(normalizedGifs[0].totalDuration / interval);
+    let timeElapsed = 0;
+
+    for (let i = 0; i < totalFrames; i++) {
+      timedFrames.forEach((gif) => {
+        if (gif.index < frames.length && gif.nextTimeFrame <= timeElapsed) {
+          // Draw to its respective canvas
+          const ctx = gif.canvas.getContext("2d");
+          if (!ctx) return;
+          ctx.clearRect(0, 0, gif.canvas.width, gif.canvas.height);
+          ctx.drawImage(gif.frames[gif.index], 0, 0);
+          gif.nextTimeFrame += gif.durations[gif.index];
+          gif.index++;
+        }
+      });
+      // Capture the image of layer and add it to list
+      const canvas = layer!.toCanvas();
+      const imgData = canvas.toDataURL("image/png");
+      const img = new Image();
+      img.src = imgData;
+
+      await new Promise((resolve) => {
+        img.onload = () => {
+          gif.addFrame(img, { delay: interval });
+          resolve("Success");
+        };
+      });
+      timeElapsed += interval;
+    }
+
+    setTimeout(() => {
+      gif.on("finished", (blob: any) => {
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        console.log("downloading");
+        link.download = "exportedKonva.gif";
+        link.click();
+      });
+
+      gif.render();
+    }, 500);
+
+    console.log(zippedGifObjects);
+  };
+
+  return (
+    <div className="min-h-screen bg-background flex flex-col">
+      {/* Header */}
+      <div className="p-4 space-y-4">
+        <div className="space-y-2">
+          <div className="flex justify-between items-center">
+            <h1 className="text-xl font-semibold">Sticker Editor</h1>
+            <span className="text-sm text-muted-foreground">Step 3 of 4</span>
+          </div>
+          <Progress value={progress} className="h-1" />
+          <p className="text-sm text-muted-foreground">
+            Easily design and personalize stickers for your photo
+          </p>
+        </div>
+        <div className="space-y-4">
+          <div className="flex justify-between">
+            <Button variant="outline" onClick={stepFunctions.goBack}>
+              Back
+            </Button>
+            <Button className="flex-grow ml-5" onClick={exportLayerAsGif}>
+              Next
+            </Button>
+          </div>
+        </div>
+
+        {/*  TODO: Save and next button. */}
+      </div>
+
+      {/*TODO: Make grid dimensions dynamic */}
+      <div className="flex justify-center items-center w-full">
+        <div>
+          <PaintCanvas
+            width={canvasDimensions.width}
+            height={canvasDimensions.height}
+            ref={canvasRef}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
