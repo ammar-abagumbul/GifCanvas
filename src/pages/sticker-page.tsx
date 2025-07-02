@@ -30,9 +30,9 @@ const getFileType: (fileName: string) => "image" | "gif" = (fileName) => {
 };
 
 const extractFramesAndDuration: (
-  fileName: string,
+  fileName: string
 ) => Promise<[HTMLCanvasElement[], number[], ImageData[], number[][]]> = async (
-  fileName,
+  fileName
 ) => {
   const frameCanvasList: HTMLCanvasElement[] = [];
   const frameDurationList: number[] = [];
@@ -49,7 +49,7 @@ const extractFramesAndDuration: (
       const imageData = new ImageData(
         new Uint8ClampedArray(patch),
         dims.width,
-        dims.height,
+        dims.height
       );
       const canvas = document.createElement("canvas");
       // canvas.width = dims.width;
@@ -68,7 +68,7 @@ const extractFramesAndDuration: (
   } catch (error) {
     const e = error as Error;
     throw new Error(
-      `Could not extract gif files. Please make sure that your file type is correct! \n ${e.message}`,
+      `Could not extract gif files. Please make sure that your file type is correct! \n ${e.message}`
     );
   }
   return [frameCanvasList, frameDurationList, imageDataList, framePositionList];
@@ -105,10 +105,11 @@ export default function Step3NonElderly({
   }>(null);
 
   // This is where the image source is set
-  const imageSourceRef = useRef("../../glasses.gif");
+  const imageSourceRef = useRef("/glasses.gif");
 
   const loadImage = async () => {
     const img = new Image();
+    img.crossOrigin = "Anonymous";
     img.src = imageSourceRef.current;
     img.onload = () => {
       setBackgroundImage(img);
@@ -166,7 +167,7 @@ export default function Step3NonElderly({
       0,
       0,
       exportCanvas.width,
-      exportCanvas.height,
+      exportCanvas.height
     );
 
     const imgDataUrl = exportCanvas.toDataURL("image/png");
@@ -223,7 +224,7 @@ export default function Step3NonElderly({
         tempCtx.putImageData(
           images[i],
           framePositions[i][0],
-          framePositions[i][1],
+          framePositions[i][1]
         );
 
         // Composite the patch onto the cumulative gifCanvas
@@ -244,7 +245,7 @@ export default function Step3NonElderly({
           0,
           0,
           width,
-          height,
+          height
         );
 
         await new Promise((resolve) => requestAnimationFrame(resolve));
@@ -259,9 +260,11 @@ export default function Step3NonElderly({
     // add to gif worker for merging
     for (let i = 0; i < frames.length; i++) {
       const frame = frames[i];
+
       const imgData = frame.toDataURL("image/png");
       const img = new Image();
       img.src = imgData;
+
       img.onload = () => {
         gif.addFrame(img, { delay: frameDurations[i] });
         console.log(`Imgages: ${img.width}w, ${img.height}h`);

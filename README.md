@@ -12,3 +12,9 @@ To run GifCanvas locally on your machine, follow these steps:
 4. **Open in Browser**: Once the server is running, open your web browser and navigate to `http://localhost:5173` (or the port specified in the terminal) to access the application.
 
 Now you're ready to edit your GIFs with GifCanvas!
+
+## Sample Output
+
+![Sample Output](example_output.gif)
+
+This is a sample output demonstrating freestyle sketching and sticker integration on a GIF using GifCanvas.

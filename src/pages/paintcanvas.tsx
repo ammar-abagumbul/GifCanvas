@@ -40,7 +40,7 @@ async function fetchStickerPaths() {
   const relativePaths = Object.keys(stickerModules)
     .filter((path) => {
       const isAccepted = acceptedFormats.some((format) =>
-        path.toLowerCase().endsWith(`.${format}`),
+        path.toLowerCase().endsWith(`.${format}`)
       );
 
       if (isAccepted) {
@@ -86,7 +86,7 @@ const PaintCanvas = forwardRef(({ backgroundImage }: PaintCanvasProps, ref) => {
   const [selectedId, setSelectedId] = useState<DrawableID>("");
   const [canvasReady, setCanvasReady] = useState(false);
   const [actionState, setActionState] = useState<CanvasAction>(
-    CanvasActions.SELECT,
+    CanvasActions.SELECT
   );
 
   const [tabVisible, setTabVisible] = useState<string>("");
@@ -152,26 +152,8 @@ const PaintCanvas = forwardRef(({ backgroundImage }: PaintCanvasProps, ref) => {
         // Draw the provided HTMLImageElement onto the canvas
         ctx.drawImage(backgroundImage, 0, 0, width, height);
       }
-      console.log("dimension updated: ", width, height);
     }
   }, [backgroundImage, canvasReady]);
-
-  const getStickers = () => {
-    endPoints.forEach((endPoint) => {
-      const img = new Image();
-      const src = `https://bucket.syncphoto.hk/2002${endPoint}`;
-      img.src = src;
-      img.onload = () => {
-        setLoadedStickers((prev) => [...prev.filter((s) => s !== src), src]);
-      };
-      img.onerror = () => console.warn(`Failed to fetch: ${src}`);
-    });
-  };
-
-  useEffect(() => {
-    console.log("Fetching your stickers");
-    getStickers();
-  }, []);
 
   useImperativeHandle(ref, () => ({
     getStageRef: () => stageRef.current!,
@@ -221,7 +203,7 @@ const PaintCanvas = forwardRef(({ backgroundImage }: PaintCanvasProps, ref) => {
         },
       ]);
     },
-    [actionState, drawables, color, sliderValue, dim],
+    [actionState, drawables, color, sliderValue, dim]
   );
 
   const getDistance = (p1: Point, p2: Point) => {
@@ -245,7 +227,7 @@ const PaintCanvas = forwardRef(({ backgroundImage }: PaintCanvasProps, ref) => {
   const handlePinchZoom = (
     stage: Konva.Stage,
     touch1: Touch,
-    touch2: Touch,
+    touch2: Touch
   ) => {
     stage.draggable(false);
 
@@ -295,7 +277,7 @@ const PaintCanvas = forwardRef(({ backgroundImage }: PaintCanvasProps, ref) => {
     lastCenter.current = newCenter;
   };
 
-  const updateDrawablePoints = (pos) => {
+  const updateDrawablePoints = (pos: { x: number; y: number } | null) => {
     if (!isPainting.current || !pos || !currentShapeId.current) return;
 
     setDrawables((prev) =>
@@ -309,8 +291,8 @@ const PaintCanvas = forwardRef(({ backgroundImage }: PaintCanvasProps, ref) => {
                 pos.y - dim.current.y,
               ],
             }
-          : scribble,
-      ),
+          : scribble
+      )
     );
   };
 
@@ -334,7 +316,7 @@ const PaintCanvas = forwardRef(({ backgroundImage }: PaintCanvasProps, ref) => {
 
       updateDrawablePoints(pos);
     },
-    [actionState, dim],
+    [actionState, dim]
   );
 
   const handleStageMouseUp = useCallback(() => {
@@ -398,7 +380,7 @@ const PaintCanvas = forwardRef(({ backgroundImage }: PaintCanvasProps, ref) => {
         },
       ]);
     },
-    [drawables],
+    [drawables]
   );
 
   const handleColorChange = useCallback(
@@ -409,7 +391,7 @@ const PaintCanvas = forwardRef(({ backgroundImage }: PaintCanvasProps, ref) => {
         setColor(inputValue);
       }
     },
-    [drawables, selectedId],
+    [drawables, selectedId]
   );
 
   const handleSliderChange = useCallback(
@@ -418,7 +400,7 @@ const PaintCanvas = forwardRef(({ backgroundImage }: PaintCanvasProps, ref) => {
       sliderValue.current = value;
       strokeWidthDisplay.current.innerText = value[0].toString();
     },
-    [drawables, selectedId, sliderValue],
+    [drawables, selectedId, sliderValue]
   );
 
   const handleShowPicker = useCallback(() => {
@@ -623,8 +605,8 @@ const PaintCanvas = forwardRef(({ backgroundImage }: PaintCanvasProps, ref) => {
         }
         className={`absolute bg-white pt-4 px-4 shadow-lg z-10 bottom-0 left-0 right-0 
             transition-opacity duration-300 ease-in-out transform ${tabVisible} ${
-              tabVisible === "hidden" ? "opacity-0" : "opacity-100"
-            }`}
+          tabVisible === "hidden" ? "opacity-0" : "opacity-100"
+        }`}
       >
         <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger
